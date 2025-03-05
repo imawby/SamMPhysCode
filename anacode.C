@@ -47,16 +47,16 @@ void anacode::Loop()
   TTree *backgroundTree = new TTree("backgroundTree", "backgroundTree");
 
   // Define variables to add to tree
-  float exampleVariable = 999.f;
   float closestSepToParent = 999.f;
   int nHits = 0;
   float trackShowerScore = 999.f;
   int generation = 0;
+  int parentPDG = 0;
 
   // Set the branches for the tree
   for (TTree *tree : {signalTree, backgroundTree})
   {
-    tree->Branch("ExampleVariable", &exampleVariable, "ExampleVariable/F");
+    tree->Branch("ParentPDG", &parentPDG, "ParentPDG/I");    
     tree->Branch("ClosestSepToParent", &closestSepToParent, "ClosestSepToParent/F");
     tree->Branch("nHits", &nHits, "nHits/I");
     tree->Branch("trackShowerScore", &trackShowerScore, "trackShowerScore/F");
@@ -71,8 +71,11 @@ void anacode::Loop()
  
   //for (Long64_t jentry=0; jentry<nentries;jentry++)
    
-  for (Long64_t jentry = 0; jentry < 1000; jentry++)   
+  for (Long64_t jentry = 0; jentry < 200; jentry++)   
     {
+      if (jentry % 100 == 0)
+	std::cout << "entry: " << jentry << "/" << nentries << std::endl;
+      
       Long64_t ientry = LoadTree(jentry);
       
       if (ientry < 0)
@@ -83,80 +86,102 @@ void anacode::Loop()
           
       if (Cut(ientry) < 0) continue;
 
-      for (int recoIndex = 0; recoIndex < Event_NRecoPFPs; recoIndex++) //testing ground for functions
-	{
-	  if (recoIndex == 0)
-	    {
-	      continue;
-	    }
-	  std::cout << "recoIndex: " << recoIndex << std::endl;
-	  std::vector<vector<double>> withinDist = findPointsWithinDist(recoIndex, 5);
+      // std::cout << "-----------------------------" << std::endl;
+      // std::cout << "-----------------------------" << std::endl;
+      // std::cout << "jEntry: " << jentry << std::endl;
+      // std::cout << "-----------------------------" << std::endl;
+      // std::cout << "-----------------------------" << std::endl;     
 
-	  std::cout << "PFP_SpacepointX->at(recoIndex).size(): " << PFP_SpacepointX->at(recoIndex).size() << ", withinDist[0].size(): " << withinDist[0].size() << std::endl;
-	  
-	  TVector3 PCA_full = findBestFitPCA(recoIndex, PFP_SpacepointX->at(recoIndex), PFP_SpacepointY->at(recoIndex), PFP_SpacepointZ->at(recoIndex));
-	  TVector3 PCA_dist = findBestFitPCA(recoIndex, withinDist[0], withinDist[1], withinDist[2]);
-	  TVector3 PtoC = GetPtoC(Track_EndX[recoIndex-1], Track_EndY[recoIndex-1], Track_EndZ[recoIndex-1], Track_StartX[recoIndex], Track_StartY[recoIndex], Track_StartZ[recoIndex]);
-	  TVector3 TVectorChild = startEndChildVector(Track_StartX[recoIndex], Track_StartY[recoIndex], Track_StartZ[recoIndex], Track_EndX[recoIndex], Track_EndY[recoIndex], Track_EndZ[recoIndex]);
-	  
-	  double DCA_startEnd = DCA(TVectorChild, PtoC);
-	  double DCA_PCAfull = DCA(PCA_full, PtoC);
-	  double DCA_PCAdist = DCA(PCA_dist, PtoC);
-	  double exDist_startEnd = extrapDist(TVectorChild, PtoC);
-	  double exDist_PCAfull = extrapDist(PCA_full, PtoC);
-	  double exDist_PCAdist = extrapDist(PCA_dist, PtoC);
-	  
-	  std::cout << "DCA startEnd: "  << DCA_startEnd << ", DCA PCA full: " << DCA_PCAfull << ", DCA PCA dist: " << DCA_PCAdist << std::endl;
-	  std::cout << "extrapolated dist startEnd: " << exDist_startEnd << ", extrap dist PCA full: " << exDist_PCAfull << ", extrap dist PCA dist: " << exDist_PCAdist << std::endl;
-	}
-      
-      /*
-      std::cout << "-----------------------------" << std::endl;
-      std::cout << "-----------------------------" << std::endl;
-      std::cout << "jEntry: " << jentry << std::endl;
-      std::cout << "-----------------------------" << std::endl;
-      std::cout << "-----------------------------" << std::endl;     
-      */
-      
-      /*
       // run the map filling function
       std::map<int, int> parentMap = mapParents(); //child->parent
       //PrintChildToParentRecoIDMap(parentMap);
 
       // For each entry in the tree (this should be a parent/child link) fill the tree
-      bool isSignal = true;
-
-
-      // Decide if background or signal
       for (int recoIndex_parent = 0; recoIndex_parent < Event_NRecoPFPs; recoIndex_parent++)
 	{
-	  std::cout << "recoID: " << PFP_RecoID[recoIndex_parent] << std::endl;
-	  int PDG_parent = findPDG(PFP_RecoID[recoIndex_parent]);
-	  std::cout << "parent PDG: " << PDG_parent << std::endl;
+	  int PDG_parent = findPDG(recoIndex_parent);
+
+	  // check parent has spacepoints (sometimes they don't)
+	  if (PFP_SpacepointX->at(recoIndex_parent).size() == 0)
+	    continue;
+
 	  if (PDG_parent == 13 or PDG_parent == 211 or PDG_parent == -13 or PDG_parent == -211)
 	    {
+	      //std::cout << "recoID: " << PFP_RecoID[recoIndex_parent] << std::endl;
+	      //std::cout << "parent PDG: " << PDG_parent << std::endl;	  
+	      
 	      for (int recoIndex_child = 0; recoIndex_child < Event_NRecoPFPs; recoIndex_child++)
 		{
-		  if (parentMap[PFP_RecoID[recoIndex_child]] == PFP_RecoID[recoIndex_parent])
+		  if (recoIndex_parent == recoIndex_child)
 		    {
-		      closestSepToParent = findClosestSep(PFP_RecoID[recoIndex_parent], PFP_RecoID[recoIndex_child]);
-		      nHits = PFP_SpacepointX[recoIndex_child].size();
-		      trackShowerScore = PFP_TrackShowerScore[recoIndex_child];
-		      generation = findGeneration(PFP_RecoID[recoIndex_child], parentMap, 1);
-		      
-		      
+		      continue;
+		    }
+
+		  // check child has spacepoints (sometimes they don't)
+		  if (PFP_SpacepointX->at(recoIndex_child).size() == 0)
+		    continue;
+
+		  // Do our variables
+		  parentPDG = PDG_parent;
+		  closestSepToParent = findClosestSep(recoIndex_parent, recoIndex_child);
+		  nHits = PFP_SpacepointX->at(recoIndex_child).size();
+		  trackShowerScore = PFP_TrackShowerScore[recoIndex_child];
+		  //generation = findGeneration(PFP_RecoID[recoIndex_child], parentMap, 1); // truth info that we can't actually use...
+
+		  // DCA variables
+		  TVector3 PtoC = GetPtoC(Track_EndX[recoIndex_parent], Track_EndY[recoIndex_parent], Track_EndZ[recoIndex_parent],
+					  Track_StartX[recoIndex_child], Track_StartY[recoIndex_child], Track_StartZ[recoIndex_child]);
+		  // Full PCA
+		  bool fullSuccessful = false;
+		  TVector3 PCA_full = findBestFitPCA(PFP_SpacepointX->at(recoIndex_child), PFP_SpacepointY->at(recoIndex_child), PFP_SpacepointZ->at(recoIndex_child), fullSuccessful);
+
+		  // WithinDist PCA
+		  bool distSuccessful = false;
+		  std::vector<vector<double>> withinDist = findPointsWithinDist(recoIndex_child, 5);		  
+		  TVector3 PCA_dist = findBestFitPCA(withinDist[0], withinDist[1], withinDist[2], distSuccessful);
+
+		  // Basic
+		  TVector3 TVectorChild = startEndChildVector(Track_StartX[recoIndex_child], Track_StartY[recoIndex_child], Track_StartZ[recoIndex_child],
+							      Track_EndX[recoIndex_child], Track_EndY[recoIndex_child], Track_EndZ[recoIndex_child]);
+	  
+		  double DCA_startEnd = DCA(TVectorChild, PtoC);
+		  double exDist_startEnd = extrapDist(TVectorChild, PtoC);		  
+		  double DCA_PCAfull = -999.0;
+		  double exDist_PCAfull = -999.0;		  
+		  double DCA_PCAdist = -999.0;
+		  double exDist_PCAdist = -999.0;		  
+
+		  if (fullSuccessful)
+		  {
+		    DCA_PCAfull = DCA(PCA_full, PtoC);
+		    exDist_PCAfull = extrapDist(PCA_full, PtoC);
+		  }
+
+		  if (distSuccessful)
+		  {
+		    DCA_PCAdist = DCA(PCA_dist, PtoC);
+		    exDist_PCAdist = extrapDist(PCA_dist, PtoC);
+		  }
+		  
+		  // std::cout << "--------------------------------" << std::endl;
+		  // std::cout << "isSignal? " << ((parentMap[PFP_RecoID[recoIndex_child]] == PFP_RecoID[recoIndex_parent])) << std::endl;
+		  // std::cout << "child PDG: " << findPDG(recoIndex_child) << std::endl;	  		  
+		  // std::cout << "closestSepToParent: " << closestSepToParent << std::endl;
+		  // std::cout << "PtoC: (" << PtoC.X() << ", " << PtoC.Y() << ", " << PtoC.Z() << ")" << std::endl;
+		  // std::cout << "PCA_full: (" << PCA_full.X() << ", " << PCA_full.Y() << ", " << PCA_full.Z() << ")" << std::endl;
+		  // std::cout << "PCA_dist: (" << PCA_dist.X() << ", " << PCA_dist.Y() << ", " << PCA_dist.Z() << ")" << std::endl;		  
+  		  // std::cout << "TVectorChild: (" << TVectorChild.X() << ", " << TVectorChild.Y() << ", " << TVectorChild.Z() << ")" << std::endl;
+		  // std::cout << "DCA startEnd: "  << DCA_startEnd << ", DCA PCA full: " << DCA_PCAfull << ", DCA PCA dist: " << DCA_PCAdist << std::endl;
+		  // std::cout << "extrapolated dist startEnd: " << exDist_startEnd << ", extrap dist PCA full: " << exDist_PCAfull << ", extrap dist PCA dist: " << exDist_PCAdist << std::endl;		      
+
+		  bool isSignal = parentMap[PFP_RecoID[recoIndex_child]] == PFP_RecoID[recoIndex_parent];
+		  if (isSignal)
+		    {		      
 		      signalTree->Fill();         //signal
 		    }
 		  else
 		    {
-		      if (PFP_RecoID[recoIndex_parent] != PFP_RecoID[recoIndex_child])
-			{
-			  closestSepToParent = findClosestSep(PFP_RecoID[recoIndex_parent], PFP_RecoID[recoIndex_child]);
-			  nHits = PFP_SpacepointX[recoIndex_child].size();
-			  trackShowerScore = PFP_TrackShowerScore[recoIndex_child];
-			  
-			  backgroundTree->Fill();     //background
-			}
+		      backgroundTree->Fill();     //background
 		    }
 		}
 	    }
@@ -164,22 +189,14 @@ void anacode::Loop()
 	    {
 	      continue;
 	    }
-	}
-      
+	}      
     }
 
   // Write trees to file and close file
   signalTree->Write();
   backgroundTree->Write();
   file->Close();
-  */
-      /////
-      
-    }
-  ////
 }
-
-     
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -532,8 +549,10 @@ int anacode::findPDG(int recoIndex)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TVector3 anacode::findBestFitPCA(int recoParticleIndex, vector<double> SpacepointsX, vector<double> SpacepointsY, vector<double> SpacepointsZ)
+TVector3 anacode::findBestFitPCA(vector<double> SpacepointsX, vector<double> SpacepointsY, vector<double> SpacepointsZ, bool &isSuccessful)
 {
+  isSuccessful = true;
+  
   std::vector<double> eVals;
   std::vector<TVector3> eVecs;
   
@@ -563,13 +582,15 @@ TVector3 anacode::findBestFitPCA(int recoParticleIndex, vector<double> Spacepoin
     }
   
   // Make sure the PCA fit is sensible
-  std::cout << "eVals.size : " << eVals.size() << std::endl;
+  //std::cout << "eVals.size : " << eVals.size() << std::endl;
   for (int i = 0; i < eVals.size(); i++)
     {
       if (std::isnan(eVals[i]))
 	{
+	  isSuccessful = false;	  
 	  std::cout << "ERROR: eVal not found" << std::endl;
 	  eVals[i] = -999;
+	  eVecs[i] = TVector3(-999.0, -999.0, -999.0);
 	}
     }
   
@@ -664,15 +685,17 @@ double anacode::getAngle(TVector3 TVectorChild, TVector3 TVectorPtoC)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 TVector3 anacode::startEndChildVector(double childStartX, double childStartY, double childStartZ, double childEndX, double childEndY, double childEndZ)
-{
-  double normaliser_X = abs(childStartX - childEndX);
-  double normaliser_Y = abs(childStartY - childEndY);
-  double normaliser_Z = abs(childStartZ - childEndZ);
+{  
+  double normaliser_X = fabs(childStartX - childEndX);
+  double normaliser_Y = fabs(childStartY - childEndY);
+  double normaliser_Z = fabs(childStartZ - childEndZ);
+  double magnitude = sqrt(pow(normaliser_X, 2) + pow(normaliser_Y, 2) + pow(normaliser_Z, 2));  
+
   
   TVector3 ChildVector;
-  ChildVector.SetX((childStartX - childEndX) / normaliser_X);
-  ChildVector.SetY((childStartY - childEndY) / normaliser_Y);
-  ChildVector.SetZ((childStartZ - childEndZ) / normaliser_Z);
+  ChildVector.SetX((childEndX - childStartX) / magnitude);
+  ChildVector.SetY((childEndY - childStartY) / magnitude);
+  ChildVector.SetZ((childEndZ - childStartZ) / magnitude);
   
   return ChildVector;
 }
@@ -690,17 +713,17 @@ std::vector<std::vector<double>> anacode::findPointsWithinDist(int recoIndex, do
   
   for (int i = 0; i < nSpacepoints; i++)
     {
-      double xDiff = PFP_SpacepointX->at(recoIndex)[i] - Track_StartX[recoIndex];
-      double yDiff = PFP_SpacepointY->at(recoIndex)[i] - Track_StartY[recoIndex];
-      double zDiff = PFP_SpacepointZ->at(recoIndex)[i] - Track_StartZ[recoIndex];
+      double xDiff = PFP_SpacepointX->at(recoIndex).at(i) - Track_StartX[recoIndex];
+      double yDiff = PFP_SpacepointY->at(recoIndex).at(i) - Track_StartY[recoIndex];
+      double zDiff = PFP_SpacepointZ->at(recoIndex).at(i) - Track_StartZ[recoIndex]; // always access elements in vectors with .at()
       double distFromTrackStart = sqrt(pow(xDiff,2) + pow(yDiff,2) + pow(zDiff,2));
       if (distFromTrackStart > dist)
 	{
 	  continue;
 	}
-      withinDist_X.emplace_back(PFP_SpacepointX->at(recoIndex)[i]);
-      withinDist_Y.emplace_back(PFP_SpacepointY->at(recoIndex)[i]);
-      withinDist_Z.emplace_back(PFP_SpacepointZ->at(recoIndex)[i]);
+      withinDist_X.emplace_back(PFP_SpacepointX->at(recoIndex).at(i));
+      withinDist_Y.emplace_back(PFP_SpacepointY->at(recoIndex).at(i));
+      withinDist_Z.emplace_back(PFP_SpacepointZ->at(recoIndex).at(i));
     }
 
   std::vector<vector<double>> withinSpacepoints;

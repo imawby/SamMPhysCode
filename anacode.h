@@ -192,7 +192,7 @@ public :
   virtual double   findClosestSep(int particleRecoIndex_1, int particleRecoIndex_2);
   virtual int      findSimID(int recoID);
   virtual int      findPDG(int recoIndex);
-  virtual TVector3 findBestFitPCA(int recoParticleIndex, vector<double> SpacepointsX, vector<double> SpacepointsY, vector<double> SpacepointsZ);
+  virtual TVector3 findBestFitPCA(vector<double> SpacepointsX, vector<double> SpacepointsY, vector<double> SpacepointsZ, bool &isSuccessful);
   virtual TVector3 findMeanPoint(int recoIndex);
   virtual double   DCA(TVector3 TVectorChild, TVector3 TVectorPtoC);
   virtual double   extrapDist(TVector3 TVectorChild, TVector3 TVectorPtoC);
